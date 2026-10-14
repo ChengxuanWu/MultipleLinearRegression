@@ -47,10 +47,13 @@ const MODELS = {
   }
 };
 
-// Benchmark Data
+// Benchmark Data with Exact Feature Rankings
 const BENCHMARK = {
   boston: {
     k: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    lasso_features: ['RM', 'DIS', 'LSTAT', 'PTRATIO', 'NOX', 'RAD', 'TAX', 'CRIM', 'CHAS', 'INDUS', 'ZN', 'B', 'AGE'],
+    mrmr_features: ['LSTAT', 'RM', 'PTRATIO', 'INDUS', 'TAX', 'NOX', 'CRIM', 'RAD', 'AGE', 'ZN', 'B', 'DIS', 'CHAS'],
+    orig_features: ['LSTAT', 'RM', 'PTRATIO', 'DIS', 'NOX', 'CHAS', 'CRIM', 'RAD', 'TAX', 'B', 'ZN', 'AGE', 'INDUS'],
     lasso: { r2: [0.528, 0.612, 0.638, 0.655, 0.662, 0.665, 0.6685, 0.667, 0.665, 0.662, 0.660, 0.659, 0.6591], rmse: [5.89, 5.34, 5.15, 5.03, 4.98, 4.95, 4.9302, 4.94, 4.96, 4.98, 4.99, 5.00, 5.000] },
     rfecv: { r2: [0.528, 0.612, 0.638, 0.655, 0.662, 0.665, 0.6685, 0.667, 0.665, 0.662, 0.660, 0.659, 0.6591], rmse: [5.89, 5.34, 5.15, 5.03, 4.98, 4.95, 4.9302, 4.94, 4.96, 4.98, 4.99, 5.00, 5.000] },
     mrmr: { r2: [0.528, 0.584, 0.615, 0.632, 0.641, 0.648, 0.652, 0.655, 0.657, 0.658, 0.6585, 0.659, 0.6591], rmse: [5.89, 5.53, 5.31, 5.19, 5.13, 5.08, 5.05, 5.03, 5.01, 5.005, 5.002, 5.001, 5.000] },
@@ -58,6 +61,13 @@ const BENCHMARK = {
   },
   startups: {
     k: [1, 2, 3, 4, 5],
+    features: [
+      'R&D Spend',
+      'R&D Spend, Marketing Spend',
+      'R&D Spend, Marketing Spend, Administration',
+      'R&D Spend, Marketing Spend, Administration, State_Florida',
+      'R&D Spend, Marketing Spend, Administration, State_Florida, State_New York'
+    ],
     rmse: [9200.5, 8750.2, 9120.4, 9300.8, 9450.0],
     r2: [0.932, 0.9474, 0.942, 0.938, 0.935]
   }
@@ -694,63 +704,300 @@ function calcStartups() {
   `;
 }
 
-// Render Plotly Charts
+// Format feature lists cleanly with line wrapping for hover tooltips
+function formatFeatureList(features, k) {
+  const list = features.slice(0, k);
+  const lines = [];
+  for (let i = 0; i < list.length; i += 4) {
+    lines.push(list.slice(i, i + 4).join(', '));
+  }
+  return lines.join('<br>&nbsp;&nbsp;');
+}
+
+function formatStartupsList(featureStr) {
+  const parts = featureStr.split(', ');
+  if (parts.length <= 2) return featureStr;
+  const lines = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    lines.push(parts.slice(i, i + 2).join(', '));
+  }
+  return lines.join('<br>&nbsp;&nbsp;');
+}
+
+// Render Plotly Charts with Detailed Interactive Hover Tooltips
 function renderCharts() {
   const plotDiv = document.getElementById('plot-feature-selection');
   if (!plotDiv) return;
 
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const textColor = isDark ? '#ffffff' : '#0f172a';
-  const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  const gridColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
+
+  const hoverlabelStyle = {
+    bgcolor: '#0f172a',
+    bordercolor: '#38bdf8',
+    font: {
+      family: 'Inter, system-ui, -apple-system, sans-serif',
+      size: 13,
+      color: '#ffffff'
+    },
+    align: 'left'
+  };
 
   if (currentProject === 'boston') {
     const b = BENCHMARK.boston;
-    const traceLassoRMSE = { x: b.k, y: b.lasso.rmse, mode: 'lines+markers', name: 'L1 Lasso (RMSE)', line: { color: '#2563eb', width: 2.5 } };
-    const traceLassoR2 = { x: b.k, y: b.lasso.r2, mode: 'lines+markers', name: 'L1 Lasso (R²)', yaxis: 'y2', line: { color: '#2563eb', width: 2.5, dash: 'dot' } };
-    const traceRFECVR2 = { x: b.k, y: b.rfecv.r2, mode: 'lines+markers', name: 'RFECV (R²)', yaxis: 'y2', line: { color: '#059669', width: 2 } };
-    const traceMRMRR2 = { x: b.k, y: b.mrmr.r2, mode: 'lines+markers', name: 'mRMR (R²)', yaxis: 'y2', line: { color: '#d97706', width: 2 } };
-    const traceOrigR2 = { x: b.k, y: b.orig.r2, mode: 'lines+markers', name: 'Backward Elim (R²)', yaxis: 'y2', line: { color: '#7c3aed', width: 2 } };
+
+    const hoverTemplateBoston = 
+      "<b><span style='font-size:13.5px; color:#38bdf8;'>%{customdata[0]}</span></b> " +
+      "<span style='color:#cbd5e1; font-weight:600;'>(k = %{customdata[1]})</span><br>" +
+      "<span style='line-height:1.7;'>" +
+      "📊 <b>Test R²:</b> <span style='color:#4ade80; font-weight:700;'>%{customdata[2]}</span><br>" +
+      "📉 <b>Test RMSE:</b> <span style='color:#f87171; font-weight:700;'>%{customdata[3]}</span><br>" +
+      "🏷️ <b>Included Features (%{customdata[1]}):</b><br>&nbsp;&nbsp;%{customdata[4]}" +
+      "%{customdata[5]}" +
+      "</span><extra></extra>";
+
+    const lassoCustomData = b.k.map((k, i) => [
+      'L1 Regularization (Lasso)',
+      k,
+      b.lasso.r2[i].toFixed(4),
+      `$${b.lasso.rmse[i].toFixed(3)}k`,
+      formatFeatureList(b.lasso_features, k),
+      k === 7 ? '<br>⭐ <b><span style="color:#fbbf24;">Champion Linear Model (k=7, R²=0.6685)</span></b>' : ''
+    ]);
+
+    const rfecvCustomData = b.k.map((k, i) => [
+      'Recursive Feature Elimination (RFECV)',
+      k,
+      b.rfecv.r2[i].toFixed(4),
+      `$${b.rfecv.rmse[i].toFixed(3)}k`,
+      formatFeatureList(b.lasso_features, k),
+      k === 7 ? '<br>⭐ <b><span style="color:#fbbf24;">Optimal Cross-Validated Subset (k=7)</span></b>' : ''
+    ]);
+
+    const mrmrCustomData = b.k.map((k, i) => [
+      'mRMR (Min-Redundancy Max-Relevance)',
+      k,
+      b.mrmr.r2[i].toFixed(4),
+      `$${b.mrmr.rmse[i].toFixed(3)}k`,
+      formatFeatureList(b.mrmr_features, k),
+      k === 13 ? '<br>📌 <b><span style="color:#93c5fd;">Full Baseline Feature Set (k=13)</span></b>' : ''
+    ]);
+
+    const origCustomData = b.k.map((k, i) => [
+      'Original Backward Elimination',
+      k,
+      b.orig.r2[i].toFixed(4),
+      `$${b.orig.rmse[i].toFixed(3)}k`,
+      formatFeatureList(b.orig_features, k),
+      k === 9 ? '<br>🎯 <b><span style="color:#c084fc;">Econometric Optimal Parsimonious (k=9)</span></b>' : ''
+    ]);
+
+    const traceLassoRMSE = {
+      x: b.k,
+      y: b.lasso.rmse,
+      mode: 'lines+markers',
+      name: 'L1 Lasso (RMSE)',
+      line: { color: '#2563eb', width: 2.5 },
+      marker: { size: 8, color: '#2563eb' },
+      customdata: lassoCustomData,
+      hovertemplate: hoverTemplateBoston
+    };
+
+    const traceLassoR2 = {
+      x: b.k,
+      y: b.lasso.r2,
+      mode: 'lines+markers',
+      name: 'L1 Lasso (R²)',
+      yaxis: 'y2',
+      line: { color: '#2563eb', width: 2.5, dash: 'dot' },
+      marker: { size: 8, color: '#2563eb' },
+      customdata: lassoCustomData,
+      hovertemplate: hoverTemplateBoston
+    };
+
+    const traceRFECVR2 = {
+      x: b.k,
+      y: b.rfecv.r2,
+      mode: 'lines+markers',
+      name: 'RFECV (R²)',
+      yaxis: 'y2',
+      line: { color: '#059669', width: 2 },
+      marker: { size: 8, color: '#059669' },
+      customdata: rfecvCustomData,
+      hovertemplate: hoverTemplateBoston
+    };
+
+    const traceMRMRR2 = {
+      x: b.k,
+      y: b.mrmr.r2,
+      mode: 'lines+markers',
+      name: 'mRMR (R²)',
+      yaxis: 'y2',
+      line: { color: '#d97706', width: 2 },
+      marker: { size: 8, color: '#d97706' },
+      customdata: mrmrCustomData,
+      hovertemplate: hoverTemplateBoston
+    };
+
+    const traceOrigR2 = {
+      x: b.k,
+      y: b.orig.r2,
+      mode: 'lines+markers',
+      name: 'Backward Elim (R²)',
+      yaxis: 'y2',
+      line: { color: '#7c3aed', width: 2 },
+      marker: { size: 8, color: '#7c3aed' },
+      customdata: origCustomData,
+      hovertemplate: hoverTemplateBoston
+    };
 
     const layout = {
-      title: { text: '<b>Comparative Feature Selection Paradigms (RMSE & R² vs k)</b>', font: { color: textColor, size: 16 } },
+      title: {
+        text: '<b>Comparative Feature Selection Paradigms (RMSE & R² vs k)</b>',
+        font: { color: textColor, size: 16 }
+      },
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
-      margin: { l: 50, r: 50, t: 60, b: 50 },
-      legend: { orientation: 'h', y: -0.25, font: { color: textColor } },
-      xaxis: { title: '<b>Number of Selected Features (k)</b>', dtick: 1, gridcolor: gridColor, color: textColor },
-      yaxis: { title: '<b>Test RMSE ($1,000s)</b>', gridcolor: gridColor, color: textColor },
-      yaxis2: { title: '<b>Test R-squared (R²)</b>', overlaying: 'y', side: 'right', color: textColor },
+      margin: { l: 55, r: 55, t: 60, b: 60 },
+      hovermode: 'closest',
+      hoverdistance: 30,
+      hoverlabel: hoverlabelStyle,
+      legend: {
+        orientation: 'h',
+        y: -0.25,
+        font: { color: textColor }
+      },
+      xaxis: {
+        title: '<b>Number of Selected Features (k)</b>',
+        dtick: 1,
+        gridcolor: gridColor,
+        color: textColor,
+        zeroline: false
+      },
+      yaxis: {
+        title: '<b>Test RMSE ($1,000s)</b>',
+        gridcolor: gridColor,
+        color: textColor,
+        zeroline: false
+      },
+      yaxis2: {
+        title: '<b>Test R-squared (R²)</b>',
+        overlaying: 'y',
+        side: 'right',
+        color: textColor,
+        zeroline: false
+      },
       annotations: [{
-        x: 7, y: 4.93,
-        text: '<b>Optimal k=7<br>RMSE=$4.93k</b>',
+        x: 7, y: 4.9302,
+        text: '<b>Optimal k=7<br>RMSE=$4.93k | R²=0.6685</b>',
         showarrow: true, arrowhead: 2, arrowcolor: '#dc2626',
-        font: { color: '#dc2626' }, bgcolor: isDark ? '#1e293b' : '#ffffff'
+        font: { color: '#dc2626', size: 11 },
+        bgcolor: isDark ? '#1e293b' : '#ffffff',
+        bordercolor: '#dc2626', borderwidth: 1, borderpad: 4
       }]
     };
 
-    Plotly.newPlot(plotDiv, [traceLassoRMSE, traceLassoR2, traceRFECVR2, traceMRMRR2, traceOrigR2], layout, { responsive: true, displayModeBar: false });
+    Plotly.newPlot(plotDiv, [traceLassoRMSE, traceLassoR2, traceRFECVR2, traceMRMRR2, traceOrigR2], layout, {
+      responsive: true,
+      displayModeBar: 'hover',
+      displaylogo: false
+    });
   } else {
     const s = BENCHMARK.startups;
-    const traceRMSE = { x: s.k, y: s.rmse, mode: 'lines+markers', name: 'Test RMSE ($)', line: { color: '#dc2626', width: 2.5 } };
-    const traceR2 = { x: s.k, y: s.r2, mode: 'lines+markers', name: 'Test R²', yaxis: 'y2', line: { color: '#059669', width: 2.5 } };
+
+    const hoverTemplateStartups = 
+      "<b><span style='font-size:13.5px; color:#38bdf8;'>%{customdata[0]}</span></b> " +
+      "<span style='color:#cbd5e1; font-weight:600;'>(k = %{customdata[1]})</span><br>" +
+      "<span style='line-height:1.7;'>" +
+      "📊 <b>Test R²:</b> <span style='color:#4ade80; font-weight:700;'>%{customdata[2]}</span><br>" +
+      "📉 <b>Test RMSE:</b> <span style='color:#f87171; font-weight:700;'>%{customdata[3]}</span><br>" +
+      "🏷️ <b>Included Features (%{customdata[1]}):</b><br>&nbsp;&nbsp;%{customdata[4]}" +
+      "%{customdata[5]}" +
+      "</span><extra></extra>";
+
+    const startupsCustomData = s.k.map((k, i) => [
+      'Stepwise Backward Elimination',
+      k,
+      s.r2[i].toFixed(4),
+      `$${Math.round(s.rmse[i]).toLocaleString()}`,
+      formatStartupsList(s.features[i]),
+      k === 2 ? '<br>⭐ <b><span style="color:#fbbf24;">Champion Optimal Model (R&D + Mkt)</span></b>' : ''
+    ]);
+
+    const traceRMSE = {
+      x: s.k,
+      y: s.rmse,
+      mode: 'lines+markers',
+      name: 'Test RMSE ($)',
+      line: { color: '#dc2626', width: 2.5 },
+      marker: { size: 8, color: '#dc2626' },
+      customdata: startupsCustomData,
+      hovertemplate: hoverTemplateStartups
+    };
+
+    const traceR2 = {
+      x: s.k,
+      y: s.r2,
+      mode: 'lines+markers',
+      name: 'Test R²',
+      yaxis: 'y2',
+      line: { color: '#059669', width: 2.5 },
+      marker: { size: 8, color: '#059669' },
+      customdata: startupsCustomData,
+      hovertemplate: hoverTemplateStartups
+    };
 
     const layout = {
-      title: { text: '<b>Backward Elimination Metrics vs Feature Count (k)</b>', font: { color: textColor, size: 16 } },
+      title: {
+        text: '<b>Backward Elimination Metrics vs Feature Count (k)</b>',
+        font: { color: textColor, size: 16 }
+      },
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
-      margin: { l: 60, r: 60, t: 60, b: 50 },
-      legend: { orientation: 'h', y: -0.25, font: { color: textColor } },
-      xaxis: { title: '<b>Number of Features (k)</b>', dtick: 1, gridcolor: gridColor, color: textColor },
-      yaxis: { title: '<b>Test RMSE ($)</b>', gridcolor: gridColor, color: textColor },
-      yaxis2: { title: '<b>Test R-squared (R²)</b>', overlaying: 'y', side: 'right', color: textColor },
+      margin: { l: 65, r: 65, t: 60, b: 60 },
+      hovermode: 'closest',
+      hoverdistance: 30,
+      hoverlabel: hoverlabelStyle,
+      legend: {
+        orientation: 'h',
+        y: -0.25,
+        font: { color: textColor }
+      },
+      xaxis: {
+        title: '<b>Number of Features (k)</b>',
+        dtick: 1,
+        gridcolor: gridColor,
+        color: textColor,
+        zeroline: false
+      },
+      yaxis: {
+        title: '<b>Test RMSE ($)</b>',
+        gridcolor: gridColor,
+        color: textColor,
+        zeroline: false
+      },
+      yaxis2: {
+        title: '<b>Test R-squared (R²)</b>',
+        overlaying: 'y',
+        side: 'right',
+        color: textColor,
+        zeroline: false
+      },
       annotations: [{
         x: 2, y: 8750.2,
-        text: '<b>Optimal k=2<br>R²=0.9474</b>',
+        text: '<b>Optimal k=2<br>RMSE=$8,750 | R²=0.9474</b>',
         showarrow: true, arrowhead: 2, arrowcolor: '#059669',
-        font: { color: '#059669' }, bgcolor: isDark ? '#1e293b' : '#ffffff'
+        font: { color: '#059669', size: 11 },
+        bgcolor: isDark ? '#1e293b' : '#ffffff',
+        bordercolor: '#059669', borderwidth: 1, borderpad: 4
       }]
     };
 
-    Plotly.newPlot(plotDiv, [traceRMSE, traceR2], layout, { responsive: true, displayModeBar: false });
+    Plotly.newPlot(plotDiv, [traceRMSE, traceR2], layout, {
+      responsive: true,
+      displayModeBar: 'hover',
+      displaylogo: false
+    });
   }
 }
