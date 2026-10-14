@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRISP-DM Studio | Boston Housing & 50 Startups</title>
+  <meta name="description" content="Production-ready machine learning regression platform featuring multi-method feature selection, econometric diagnostics, and real-time interactive valuation calculators.">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Plotly.js CDN for fast, interactive zero-dependency charts -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-icon">🔬</div>
+        <div>
+          <div class="brand-title">Data Mining Studio</div>
+          <div class="brand-subtitle">CRISP-DM Analytics Lab</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="nav-section-title">Navigation</div>
+        <div class="project-selector">
+          <button id="btn-project-boston" class="project-btn active" onclick="switchProject('boston')">
+            <span>🏡</span>
+            <span>Boston Housing Price</span>
+          </button>
+          <button id="btn-project-startups" class="project-btn" onclick="switchProject('startups')">
+            <span>💼</span>
+            <span>50 Startups Profit</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="lifecycle-box">
+        <h4>CRISP-DM 6-Phase Lifecycle</h4>
+        <ol>
+          <li>Business Understanding</li>
+          <li>Data Understanding</li>
+          <li>Data Preparation</li>
+          <li>Modeling & Selection</li>
+          <li>Evaluation & Diagnostics</li>
+          <li>Deployment Pipeline</li>
+        </ol>
+      </div>
+
+      <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()">
+        <span id="theme-icon">🌙</span>
+        <span id="theme-text">Toggle Dark Mode</span>
+      </button>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="header-banner">
+        <h1 id="page-title" class="main-title">🏡 Boston Housing Price Prediction</h1>
+        <p id="page-subtitle" class="main-subtitle">
+          Multi-Method Feature Selection (Lasso, RFECV, mRMR, Backward Elimination) & High-R² Champion Engine
+        </p>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="tabs-nav" aria-label="CRISP-DM Phases">
+        <button class="tab-btn active" onclick="switchTab('phase1')">🎯 Phase 1: Business</button>
+        <button class="tab-btn" onclick="switchTab('phase2')">🔍 Phase 2: Data</button>
+        <button class="tab-btn" onclick="switchTab('phase3')">🧹 Phase 3: Prep</button>
+        <button class="tab-btn" onclick="switchTab('phase4')">⚖️ Phase 4: Modeling</button>
+        <button class="tab-btn" onclick="switchTab('phase5')">📈 Phase 5: Evaluation</button>
+        <button class="tab-btn" onclick="switchTab('phase6')">🚀 Phase 6: Prediction</button>
+      </nav>
+
+      <!-- TAB 1: BUSINESS UNDERSTANDING -->
+      <section id="pane-phase1" class="tab-pane active">
+        <div id="content-phase1"></div>
+      </section>
+
+      <!-- TAB 2: DATA UNDERSTANDING -->
+      <section id="pane-phase2" class="tab-pane">
+        <div id="content-phase2"></div>
+      </section>
+
+      <!-- TAB 3: DATA PREPARATION -->
+      <section id="pane-phase3" class="tab-pane">
+        <div id="content-phase3"></div>
+      </section>
+
+      <!-- TAB 4: MODELING & FEATURE SELECTION -->
+      <section id="pane-phase4" class="tab-pane">
+        <div id="content-phase4"></div>
+        <div id="plot-feature-selection" class="plot-box"></div>
+        <div id="content-phase4-table"></div>
+      </section>
+
+      <!-- TAB 5: EVALUATION & DIAGNOSTICS -->
+      <section id="pane-phase5" class="tab-pane">
+        <div id="content-phase5"></div>
+      </section>
+
+      <!-- TAB 6: PREDICTION CALCULATOR -->
+      <section id="pane-phase6" class="tab-pane">
+        <div id="content-phase6"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
