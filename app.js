@@ -93,6 +93,7 @@ function toggleTheme() {
   localStorage.setItem('studio_theme', next);
   updateThemeButton(next);
   renderCharts();
+  renderBatchCharts();
 }
 
 function updateThemeButton(theme) {
@@ -127,6 +128,9 @@ function switchTab(tabId) {
   if (tabId === 'phase4') {
     setTimeout(renderCharts, 50);
   }
+  if (tabId === 'batch') {
+    setTimeout(renderBatchCharts, 50);
+  }
 }
 
 // Render Content
@@ -148,6 +152,7 @@ function renderProject() {
   renderPhase4(isBoston);
   renderPhase5(isBoston);
   renderPhase6(isBoston);
+  renderBatch(isBoston);
 
   switchTab(currentTab);
 }
@@ -568,6 +573,14 @@ function renderPhase6(isBoston) {
           </div>
         </div>
       </div>
+
+      <div class="info-card" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(56, 189, 248, 0.05)); border: 1.5px solid var(--border-color);">
+        <div>
+          <div style="font-weight: 800; font-size: 1.05rem; color: var(--text-accent); margin-bottom: 4px;">📂 Need to Evaluate an Entire CSV Dataset?</div>
+          <div style="font-size: 0.88rem; color: var(--text-secondary);">Upload a holdout CSV file or provide a web link to compute batch predictions and calculate holdout Test RMSE & R² metrics instantly.</div>
+        </div>
+        <button class="pill-btn active" style="padding: 10px 18px; font-size: 0.92rem;" onclick="switchTab('batch')">Go to Batch CSV Evaluation Tab →</button>
+      </div>
     `;
     calcBoston();
   } else {
@@ -602,6 +615,14 @@ function renderPhase6(isBoston) {
             <div id="diag-startups-breakdown"></div>
           </div>
         </div>
+      </div>
+
+      <div class="info-card" style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(56, 189, 248, 0.05)); border: 1.5px solid var(--border-color);">
+        <div>
+          <div style="font-weight: 800; font-size: 1.05rem; color: var(--text-accent); margin-bottom: 4px;">📂 Need to Evaluate an Entire CSV Dataset?</div>
+          <div style="font-size: 0.88rem; color: var(--text-secondary);">Upload a holdout CSV file or provide a web link to compute batch predictions and calculate holdout Test RMSE & R² metrics instantly.</div>
+        </div>
+        <button class="pill-btn active" style="padding: 10px 18px; font-size: 0.92rem;" onclick="switchTab('batch')">Go to Batch CSV Evaluation Tab →</button>
       </div>
     `;
     calcStartups();
@@ -1000,4 +1021,782 @@ function renderCharts() {
       displaylogo: false
     });
   }
+}
+
+/* ==========================================================================
+   BATCH CSV DATASET PREDICTION & BENCHMARK EVALUATION ENGINE
+   ========================================================================== */
+
+let currentBatchRawData = null; // { headers: string[], rows: object[], sourceName: string }
+let currentBatchResult = null;  // processed metrics and predictions
+let currentBatchBostonModel = 'high-r2';
+
+const BOSTON_MEDIANS = {
+  RM: 6.208,
+  DIS: 3.207,
+  LSTAT: 11.36,
+  PTRATIO: 19.05,
+  NOX: 0.538,
+  RAD: 5.0,
+  TAX: 330.0
+};
+
+const STARTUPS_MEDIANS = {
+  'R&D Spend': 73051.08,
+  'Marketing Spend': 212716.24,
+  'Administration': 122616.84
+};
+
+// Render Batch CSV Tab Interface
+function renderBatch(isBoston) {
+  const container = document.getElementById('content-batch');
+  if (!container) return;
+
+  const datasetName = isBoston ? 'Boston Housing' : '50 Startups';
+  const sampleFile = isBoston ? 'HousingData.csv' : '50_Startups.csv';
+  const sampleDesc = isBoston ? '506 properties, 13 features + MEDV' : '50 startups, 3 spends + Profit';
+
+  container.innerHTML = `
+    <div class="info-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h3 style="margin:0 0 6px 0;">📂 Batch Dataset Prediction & Performance Benchmark Engine</h3>
+          <p style="margin:0;">Upload a holdout CSV file or provide a web link. The machine learning model will instantly parse the dataset, generate predictions for all rows, and evaluate the holdout <b>Test RMSE</b> and <b>Test R²</b> metrics against ground truth.</p>
+        </div>
+      </div>
+    </div>
+
+    ${isBoston ? `
+      <div class="pill-group" style="margin-bottom:16px;">
+        <span style="font-size:0.88rem; font-weight:700; color:var(--text-secondary); display:flex; align-items:center; margin-right:8px;">Evaluation Model:</span>
+        <button id="btn-batch-model-poly" class="pill-btn ${currentBatchBostonModel === 'high-r2' ? 'active' : ''}" onclick="setBatchBostonModel('high-r2')">⭐ High-R² Poly Ridge (R² = 0.8029)</button>
+        <button id="btn-batch-model-linear" class="pill-btn ${currentBatchBostonModel === 'linear' ? 'active' : ''}" onclick="setBatchBostonModel('linear')">📐 Champion Linear (R² = 0.6685)</button>
+      </div>
+    ` : ''}
+
+    <div class="upload-grid">
+      <!-- File Upload Zone -->
+      <div id="drop-zone-csv" class="upload-zone" onclick="document.getElementById('batch-file-input').click()">
+        <input type="file" id="batch-file-input" accept=".csv" style="display:none;" onchange="handleFileSelect(event)">
+        <div class="upload-zone-icon">📁</div>
+        <div class="upload-zone-title">Click to Browse or Drag & Drop .CSV File Here</div>
+        <div class="upload-zone-subtitle">Automatic header detection for ${isBoston ? 'RM, DIS, LSTAT, PTRATIO, NOX, RAD, TAX & MEDV' : 'R&D Spend, Marketing Spend, Administration & Profit'}</div>
+        <div id="file-chosen-name" style="margin-top:10px; font-weight:700; color:var(--primary-blue); font-size:0.86rem;"></div>
+      </div>
+
+      <!-- URL Input Box -->
+      <div class="url-box">
+        <div>
+          <div style="font-weight:800; font-size:1rem; color:var(--text-accent); margin-bottom:4px;">🌐 Or Load Dataset from URL / Server Link</div>
+          <div style="font-size:0.82rem; color:var(--text-muted);">Enter a publicly accessible CSV URL or choose a pre-loaded local benchmark dataset.</div>
+        </div>
+
+        <div class="url-input-group">
+          <input type="text" id="batch-url-input" class="url-input" placeholder="e.g. HousingData.csv or https://.../data.csv" value="${sampleFile}">
+          <button class="btn-fetch" onclick="handleUrlFetch()">⚡ Fetch & Predict</button>
+        </div>
+
+        <div>
+          <div style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); margin-bottom:4px;">Quick-Load Benchmark Presets:</div>
+          <div class="sample-pills-wrap">
+            <button class="sample-pill-btn" onclick="loadSamplePreset('HousingData.csv')">🏡 Boston Housing (${isBoston ? 'Active Dataset' : '506 rows'})</button>
+            <button class="sample-pill-btn" onclick="loadSamplePreset('50_Startups.csv')">💼 50 Startups (${!isBoston ? 'Active Dataset' : '50 rows'})</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="batch-status-msg" style="display:none; padding:12px 16px; border-radius:8px; font-size:0.88rem; font-weight:600; margin-bottom:16px;"></div>
+
+    <!-- Results Display -->
+    <div id="batch-results-container" class="batch-results-wrap" style="display:none;"></div>
+  `;
+
+  setupDragAndDrop();
+
+  if (currentBatchResult && currentBatchResult.project === currentProject) {
+    displayBatchResults(currentBatchResult);
+  }
+}
+
+// Drag & Drop Listener Setup
+function setupDragAndDrop() {
+  const dropZone = document.getElementById('drop-zone-csv');
+  if (!dropZone) return;
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('dragover');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('dragover');
+    }, false);
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      handleFileUpload(files[0]);
+    }
+  }, false);
+}
+
+// Model Switcher in Batch Mode
+function setBatchBostonModel(modelType) {
+  currentBatchBostonModel = modelType;
+  const polyBtn = document.getElementById('btn-batch-model-poly');
+  const linBtn = document.getElementById('btn-batch-model-linear');
+  if (polyBtn) polyBtn.classList.toggle('active', modelType === 'high-r2');
+  if (linBtn) linBtn.classList.toggle('active', modelType === 'linear');
+  if (currentBatchRawData) {
+    evaluateLoadedDataset();
+  }
+}
+
+// Show Status Notification
+function showBatchStatus(message, type = 'info') {
+  const box = document.getElementById('batch-status-msg');
+  if (!box) return;
+  box.style.display = 'block';
+  if (type === 'error') {
+    box.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+    box.style.color = '#ef4444';
+    box.style.border = '1px solid #ef4444';
+    box.innerHTML = `⚠️ <b>Error:</b> ${message}`;
+  } else if (type === 'success') {
+    box.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+    box.style.color = '#16a34a';
+    box.style.border = '1px solid #16a34a';
+    box.innerHTML = `✅ <b>Success:</b> ${message}`;
+  } else {
+    box.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+    box.style.color = '#2563eb';
+    box.style.border = '1px solid #2563eb';
+    box.innerHTML = `ℹ️ ${message}`;
+  }
+}
+
+// Robust RFC-4180 Compliant CSV Parser
+function parseCSV(text) {
+  const lines = [];
+  let currentRow = [];
+  let currentVal = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentVal += '"';
+        i++; // skip escaped quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      currentRow.push(currentVal.trim());
+      currentVal = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      currentRow.push(currentVal.trim());
+      if (currentRow.length > 0 && currentRow.some(v => v !== '')) {
+        lines.push(currentRow);
+      }
+      currentRow = [];
+      currentVal = '';
+    } else {
+      currentVal += char;
+    }
+  }
+  if (currentVal || currentRow.length > 0) {
+    currentRow.push(currentVal.trim());
+    if (currentRow.some(v => v !== '')) {
+      lines.push(currentRow);
+    }
+  }
+
+  if (lines.length < 2) return null;
+  const headers = lines[0].map(h => h.replace(/^["']|["']$/g, '').trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = lines[i][j] !== undefined ? lines[i][j].replace(/^["']|["']$/g, '').trim() : '';
+    }
+    rows.push(row);
+  }
+  return { headers, rows };
+}
+
+// Case-Insensitive Fuzzy Column Identifier
+function findColumn(headers, possibleNames) {
+  const lowerMap = {};
+  headers.forEach(h => {
+    lowerMap[h.toLowerCase().replace(/[^a-z0-9]/g, '')] = h;
+  });
+  for (const name of possibleNames) {
+    const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (lowerMap[clean]) return lowerMap[clean];
+  }
+  return null;
+}
+
+// File Selection Handler
+function handleFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (file) {
+    handleFileUpload(file);
+  }
+}
+
+function handleFileUpload(file) {
+  const label = document.getElementById('file-chosen-name');
+  if (label) label.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+  showBatchStatus(`Reading file ${file.name}...`, 'info');
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    processBatchCSV(e.target.result, file.name);
+  };
+  reader.onerror = () => {
+    showBatchStatus(`Failed to read ${file.name}. Please ensure it is a valid text/csv file.`, 'error');
+  };
+  reader.readAsText(file);
+}
+
+// URL Fetch Handler
+async function handleUrlFetch() {
+  const input = document.getElementById('batch-url-input');
+  if (!input) return;
+  const url = input.value.trim();
+  if (!url) {
+    showBatchStatus('Please enter a valid CSV URL or choose a preset file.', 'error');
+    return;
+  }
+  showBatchStatus(`Fetching dataset from ${url}...`, 'info');
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    const text = await res.text();
+    processBatchCSV(text, url);
+  } catch (err) {
+    showBatchStatus(`Failed to fetch from URL: ${err.message}. If this is an external domain, ensure CORS allows access.`, 'error');
+  }
+}
+
+// Preset Quick-Loader
+function loadSamplePreset(filename) {
+  const input = document.getElementById('batch-url-input');
+  if (input) input.value = filename;
+  handleUrlFetch();
+}
+
+// Predict a Single Boston Row
+function predictBostonRecord(row, modelType) {
+  const getVal = (col, fallback) => {
+    if (row[col] !== undefined && row[col] !== '' && row[col] !== 'NA' && row[col] !== 'null') {
+      const v = parseFloat(row[col]);
+      if (!isNaN(v)) return v;
+    }
+    return fallback;
+  };
+
+  const rm = getVal('RM', BOSTON_MEDIANS.RM);
+  const dis = getVal('DIS', BOSTON_MEDIANS.DIS);
+  const lstat = getVal('LSTAT', BOSTON_MEDIANS.LSTAT);
+  const ptratio = getVal('PTRATIO', BOSTON_MEDIANS.PTRATIO);
+  const nox = getVal('NOX', BOSTON_MEDIANS.NOX);
+  const rad = getVal('RAD', BOSTON_MEDIANS.RAD);
+  const tax = getVal('TAX', BOSTON_MEDIANS.TAX);
+
+  let predK = 0;
+  if (modelType === 'linear') {
+    const lin = MODELS.boston.linear;
+    predK = lin.intercept +
+      lin.coefficients[0] * rm +
+      lin.coefficients[1] * dis +
+      lin.coefficients[2] * lstat +
+      lin.coefficients[3] * ptratio +
+      lin.coefficients[4] * nox +
+      lin.coefficients[5] * rad +
+      lin.coefficients[6] * tax;
+  } else {
+    const ridge = MODELS.boston.ridge_poly;
+    const raw = [rm, dis, lstat, ptratio, nox, rad, tax];
+    const scaled = raw.map((val, idx) => (val - ridge.scaler_mean[idx]) / ridge.scaler_scale[idx]);
+    
+    let sum = ridge.intercept;
+    for (let i = 0; i < ridge.powers.length; i++) {
+      const p = ridge.powers[i];
+      let term = 1.0;
+      for (let j = 0; j < p.length; j++) {
+        if (p[j] > 0) term *= Math.pow(scaled[j], p[j]);
+      }
+      sum += ridge.coefficients[i] * term;
+    }
+    predK = sum;
+  }
+
+  predK = Math.max(5.0, Math.min(50.0, predK));
+  return {
+    predK,
+    predDollar: Math.round(predK * 1000),
+    features: { RM: rm, DIS: dis, LSTAT: lstat, PTRATIO: ptratio, NOX: nox, RAD: rad, TAX: tax }
+  };
+}
+
+// Predict a Single Startups Row
+function predictStartupsRecord(row) {
+  const getVal = (col, fallback) => {
+    if (row[col] !== undefined && row[col] !== '' && row[col] !== 'NA' && row[col] !== 'null') {
+      const v = parseFloat(row[col]);
+      if (!isNaN(v)) return v;
+    }
+    return fallback;
+  };
+
+  const rd = getVal('R&D Spend', STARTUPS_MEDIANS['R&D Spend']);
+  const mkt = getVal('Marketing Spend', STARTUPS_MEDIANS['Marketing Spend']);
+  const admin = getVal('Administration', STARTUPS_MEDIANS['Administration']);
+
+  const s = MODELS.startups;
+  const profit = s.intercept + s.coefficients[0] * rd + s.coefficients[1] * mkt;
+
+  return {
+    predProfit: profit,
+    features: { 'R&D Spend': rd, 'Marketing Spend': mkt, 'Administration': admin }
+  };
+}
+
+// Master CSV Batch Processor
+function processBatchCSV(csvText, sourceName) {
+  const parsed = parseCSV(csvText);
+  if (!parsed || parsed.rows.length === 0) {
+    showBatchStatus(`Failed to parse CSV from ${sourceName}. File was empty or formatted incorrectly.`, 'error');
+    return;
+  }
+
+  currentBatchRawData = {
+    headers: parsed.headers,
+    rows: parsed.rows,
+    sourceName: sourceName
+  };
+
+  showBatchStatus(`Successfully parsed ${parsed.rows.length} rows and ${parsed.headers.length} columns from ${sourceName}! Running model inference...`, 'success');
+  evaluateLoadedDataset();
+}
+
+// Dataset Evaluation Engine
+function evaluateLoadedDataset() {
+  if (!currentBatchRawData) return;
+
+  const isBoston = currentProject === 'boston';
+  const { headers, rows, sourceName } = currentBatchRawData;
+
+  // Identify target column for ground truth evaluation
+  const targetCol = isBoston
+    ? findColumn(headers, ['medv', 'price', 'target', 'actual', 'valuation', 'home_price', 'value'])
+    : findColumn(headers, ['profit', 'target', 'actual', 'net_profit', 'return']);
+
+  // Extract canonical feature column mappings
+  let colMap = {};
+  if (isBoston) {
+    colMap = {
+      RM: findColumn(headers, ['rm', 'rooms', 'avg_rooms']),
+      DIS: findColumn(headers, ['dis', 'distance']),
+      LSTAT: findColumn(headers, ['lstat', 'lower_status', 'socioeconomic']),
+      PTRATIO: findColumn(headers, ['ptratio', 'pupil_teacher_ratio', 'pupil_teacher']),
+      NOX: findColumn(headers, ['nox', 'nitric_oxide']),
+      RAD: findColumn(headers, ['rad', 'highway_accessibility', 'highway']),
+      TAX: findColumn(headers, ['tax', 'property_tax'])
+    };
+  } else {
+    colMap = {
+      'R&D Spend': findColumn(headers, ['rdspend', 'rd', 'research', 'rnd', 'rd_spend']),
+      'Marketing Spend': findColumn(headers, ['marketingspend', 'marketing', 'mkt', 'mkt_spend']),
+      'Administration': findColumn(headers, ['administration', 'admin', 'administrative'])
+    };
+  }
+
+  const results = [];
+  let sse = 0;
+  let sae = 0;
+  let sumActual = 0;
+  let validActualCount = 0;
+  let sumPred = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i];
+    const rowNormalized = {};
+    for (const [canonical, mapped] of Object.entries(colMap)) {
+      rowNormalized[canonical] = mapped && raw[mapped] !== undefined ? raw[mapped] : '';
+    }
+
+    let actual = null;
+    let predicted = 0;
+    let predDisplay = '';
+    let actualDisplay = '';
+    let residual = null;
+    let featureDetails = {};
+
+    if (isBoston) {
+      const predObj = predictBostonRecord(rowNormalized, currentBatchBostonModel);
+      predicted = predObj.predK; // in thousands
+      predDisplay = `$${predObj.predDollar.toLocaleString()}`;
+      featureDetails = predObj.features;
+      sumPred += predObj.predDollar;
+
+      if (targetCol && raw[targetCol] !== '' && raw[targetCol] !== 'NA' && raw[targetCol] !== 'null') {
+        const rawTarget = parseFloat(raw[targetCol]);
+        if (!isNaN(rawTarget)) {
+          // If ground truth target is > 1000, it's in raw dollars, otherwise in thousands
+          const targetInK = rawTarget > 1000 ? rawTarget / 1000 : rawTarget;
+          actual = targetInK;
+          actualDisplay = `$${Math.round(targetInK * 1000).toLocaleString()}`;
+          residual = targetInK - predicted;
+          const diffDollar = (targetInK - predicted) * 1000;
+
+          sse += Math.pow(diffDollar, 2);
+          sae += Math.abs(diffDollar);
+          sumActual += targetInK * 1000;
+          validActualCount++;
+        }
+      }
+    } else {
+      const predObj = predictStartupsRecord(rowNormalized);
+      predicted = predObj.predProfit;
+      predDisplay = `$${Math.round(predicted).toLocaleString()}`;
+      featureDetails = predObj.features;
+      sumPred += predicted;
+
+      if (targetCol && raw[targetCol] !== '' && raw[targetCol] !== 'NA' && raw[targetCol] !== 'null') {
+        const rawTarget = parseFloat(raw[targetCol]);
+        if (!isNaN(rawTarget)) {
+          actual = rawTarget;
+          actualDisplay = `$${Math.round(rawTarget).toLocaleString()}`;
+          residual = actual - predicted;
+
+          sse += Math.pow(residual, 2);
+          sae += Math.abs(residual);
+          sumActual += actual;
+          validActualCount++;
+        }
+      }
+    }
+
+    results.push({
+      rowIndex: i + 1,
+      rawRow: raw,
+      actual: actual,
+      actualDisplay: actualDisplay || 'N/A (Holdout)',
+      predicted: predicted,
+      predDisplay: predDisplay,
+      residual: residual,
+      residualDisplay: residual !== null ? (isBoston ? `$${Math.round(residual * 1000).toLocaleString()}` : `$${Math.round(residual).toLocaleString()}`) : 'N/A',
+      features: featureDetails
+    });
+  }
+
+  // Compute Holdout Performance Metrics
+  const hasGroundTruth = validActualCount >= 2;
+  let rmse = null;
+  let r2 = null;
+  let mae = null;
+
+  if (hasGroundTruth) {
+    rmse = Math.sqrt(sse / validActualCount);
+    mae = sae / validActualCount;
+    const meanActual = sumActual / validActualCount;
+    let sst = 0;
+    for (const r of results) {
+      if (r.actual !== null) {
+        const actVal = isBoston ? r.actual * 1000 : r.actual;
+        sst += Math.pow(actVal - meanActual, 2);
+      }
+    }
+    r2 = sst > 0 ? 1 - (sse / sst) : 1.0;
+  }
+
+  currentBatchResult = {
+    project: currentProject,
+    sourceName: sourceName,
+    hasGroundTruth: hasGroundTruth,
+    targetCol: targetCol,
+    modelType: isBoston ? currentBatchBostonModel : 'Champion Econometric',
+    totalRows: rows.length,
+    evaluatedRows: validActualCount,
+    rmse: rmse,
+    r2: r2,
+    mae: mae,
+    meanPred: sumPred / Math.max(1, rows.length),
+    results: results,
+    headers: headers
+  };
+
+  displayBatchResults(currentBatchResult);
+}
+
+// Display Batch Results in UI
+function displayBatchResults(data) {
+  const container = document.getElementById('batch-results-container');
+  if (!container) return;
+
+  container.style.display = 'flex';
+  const isBoston = data.project === 'boston';
+
+  container.innerHTML = `
+    <!-- Benchmark Summary Cards -->
+    <div class="cards-grid">
+      <div class="metric-card">
+        <div class="stat-number">${data.totalRows}</div>
+        <div class="stat-label">Total Records Evaluated</div>
+      </div>
+      <div class="metric-card">
+        <div class="stat-number" style="color:${data.hasGroundTruth ? '#2563eb' : '#64748b'};">
+          ${data.hasGroundTruth ? `$${Math.round(data.rmse).toLocaleString()}` : 'N/A'}
+        </div>
+        <div class="stat-label">Holdout Test RMSE ${isBoston ? '($4.93k baseline)' : '($8,750 baseline)'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="stat-number" style="color:${data.hasGroundTruth ? '#059669' : '#64748b'};">
+          ${data.hasGroundTruth ? data.r2.toFixed(4) : 'N/A'}
+        </div>
+        <div class="stat-label">Holdout Test R² Score ${isBoston ? '(R²: 0.6685 / 0.8029)' : '(R²: 0.9474)'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="stat-number" style="color:#d97706;">
+          ${data.hasGroundTruth ? `$${Math.round(data.mae).toLocaleString()}` : `$${Math.round(data.meanPred).toLocaleString()}`}
+        </div>
+        <div class="stat-label">${data.hasGroundTruth ? 'Mean Absolute Error (MAE)' : 'Average Predicted Value'}</div>
+      </div>
+    </div>
+
+    <!-- Actions & Info Header -->
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-top:8px;">
+      <div>
+        <span class="status-badge ${data.hasGroundTruth ? 'optimal' : 'neutral'}">
+          ${data.hasGroundTruth ? `✅ Ground Truth Column Found: "${data.targetCol}" (${data.evaluatedRows} paired comparisons)` : 'ℹ️ Inference Mode: No ground truth target column found in CSV'}
+        </span>
+        <span style="font-size:0.82rem; color:var(--text-muted); margin-left:8px;">
+          Source: <b>${data.sourceName}</b> | Model: <b>${data.modelType}</b>
+        </span>
+      </div>
+      <button class="btn-download-csv" onclick="exportBatchCSV()">
+        <span>📥</span>
+        <span>Export Enriched CSV with Predictions</span>
+      </button>
+    </div>
+
+    <!-- Interactive Scatter / Distribution Plot -->
+    <div class="plot-box" style="min-height:460px;">
+      <div id="plot-batch-eval" style="width:100%; height:450px;"></div>
+    </div>
+
+    <!-- Preview Table -->
+    <div class="info-card" style="margin-top:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0;">📋 Predictions & Residuals Preview (First 25 Rows)</h3>
+        <span style="font-size:0.82rem; color:var(--text-muted);">Showing 1 - ${Math.min(25, data.results.length)} of ${data.results.length} records</span>
+      </div>
+      <div class="batch-table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Key Attributes</th>
+              <th>Actual Target</th>
+              <th>Model Prediction</th>
+              ${data.hasGroundTruth ? '<th>Residual Error</th><th>Fit Quality</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${data.results.slice(0, 25).map(r => {
+              const featStr = Object.entries(r.features).map(([k, v]) => `<b>${k}:</b> ${typeof v === 'number' ? (v > 100 ? Math.round(v).toLocaleString() : v.toFixed(2)) : v}`).join(' | ');
+              const absErr = r.residual !== null ? Math.abs(r.residual * (isBoston ? 1000 : 1)) : 0;
+              const fitClass = absErr < (isBoston ? 2500 : 6000) ? 'optimal' : (absErr > (isBoston ? 7000 : 15000) ? 'warn' : 'neutral');
+              const fitText = fitClass === 'optimal' ? '🌟 High Fit' : (fitClass === 'warn' ? '⚠️ High Residual' : '🔹 Standard');
+
+              return `
+                <tr>
+                  <td><b>${r.rowIndex}</b></td>
+                  <td style="font-size:0.82rem; color:var(--text-secondary);">${featStr}</td>
+                  <td><b>${r.actualDisplay}</b></td>
+                  <td><b style="color:var(--primary-blue);">${r.predDisplay}</b></td>
+                  ${data.hasGroundTruth ? `
+                    <td style="color:${r.residual >= 0 ? '#16a34a' : '#dc2626'}; font-weight:700;">${r.residualDisplay}</td>
+                    <td><span class="status-badge ${fitClass}">${fitText}</span></td>
+                  ` : ''}
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  setTimeout(renderBatchCharts, 50);
+}
+
+// Render Plotly Chart for Batch Results
+function renderBatchCharts() {
+  const plotDiv = document.getElementById('plot-batch-eval');
+  if (!plotDiv || !currentBatchResult) return;
+
+  const data = currentBatchResult;
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = isDark ? '#ffffff' : '#0f172a';
+  const gridColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
+  const isBoston = data.project === 'boston';
+
+  const hoverlabelStyle = {
+    bgcolor: '#0f172a',
+    bordercolor: '#38bdf8',
+    font: { family: 'Inter, system-ui, sans-serif', size: 12.5, color: '#ffffff' },
+    align: 'left'
+  };
+
+  if (data.hasGroundTruth) {
+    const validRows = data.results.filter(r => r.actual !== null);
+    const xActual = validRows.map(r => isBoston ? r.actual * 1000 : r.actual);
+    const yPred = validRows.map(r => isBoston ? r.predicted * 1000 : r.predicted);
+
+    const minVal = Math.min(...xActual, ...yPred) * 0.92;
+    const maxVal = Math.max(...xActual, ...yPred) * 1.05;
+
+    const customdata = validRows.map(r => [
+      r.rowIndex,
+      r.actualDisplay,
+      r.predDisplay,
+      r.residualDisplay,
+      Object.entries(r.features).slice(0, 3).map(([k, v]) => `${k}: ${typeof v === 'number' ? (v > 100 ? Math.round(v).toLocaleString() : v.toFixed(2)) : v}`).join(', ')
+    ]);
+
+    const traceScatter = {
+      x: xActual,
+      y: yPred,
+      mode: 'markers',
+      name: 'Holdout Instances',
+      marker: {
+        size: 8,
+        color: '#2563eb',
+        opacity: 0.85,
+        line: { color: '#ffffff', width: 1 }
+      },
+      customdata: customdata,
+      hovertemplate:
+        "<b>Holdout Instance #%{customdata[0]}</b><br>" +
+        "• <b>Actual:</b> <span style='color:#60a5fa;'>%{customdata[1]}</span><br>" +
+        "• <b>Predicted:</b> <span style='color:#34d399;'>%{customdata[2]}</span><br>" +
+        "• <b>Residual:</b> <span style='color:#f87171;'>%{customdata[3]}</span><br>" +
+        "• <b>Features:</b> %{customdata[4]}<extra></extra>"
+    };
+
+    const traceIdentity = {
+      x: [minVal, maxVal],
+      y: [minVal, maxVal],
+      mode: 'lines',
+      name: 'Ideal Fit (y = x)',
+      line: { color: '#ef4444', dash: 'dash', width: 2 }
+    };
+
+    const layout = {
+      title: {
+        text: `<b>Holdout Dataset: Actual vs. Predicted (RMSE = $${Math.round(data.rmse).toLocaleString()}, R² = ${data.r2.toFixed(4)})</b>`,
+        font: { color: textColor, size: 15 }
+      },
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      margin: { l: 65, r: 40, t: 60, b: 60 },
+      hovermode: 'closest',
+      hoverlabel: hoverlabelStyle,
+      legend: { orientation: 'h', y: -0.25, font: { color: textColor } },
+      xaxis: {
+        title: `<b>Ground Truth Actual ${isBoston ? 'MEDV ($)' : 'Profit ($)'}</b>`,
+        gridcolor: gridColor,
+        color: textColor,
+        range: [minVal, maxVal]
+      },
+      yaxis: {
+        title: `<b>Model Predicted ${isBoston ? 'MEDV ($)' : 'Profit ($)'}</b>`,
+        gridcolor: gridColor,
+        color: textColor,
+        range: [minVal, maxVal]
+      }
+    };
+
+    Plotly.newPlot(plotDiv, [traceScatter, traceIdentity], layout, { responsive: true, displayModeBar: 'hover', displaylogo: false });
+  } else {
+    // Histogram of Predictions
+    const predVals = data.results.map(r => isBoston ? r.predicted * 1000 : r.predicted);
+    const traceHist = {
+      x: predVals,
+      type: 'histogram',
+      marker: { color: '#2563eb', line: { color: '#ffffff', width: 1 } },
+      name: 'Predicted Values'
+    };
+
+    const layout = {
+      title: {
+        text: `<b>Predicted Distribution for Uploaded Dataset (Mean: $${Math.round(data.meanPred).toLocaleString()})</b>`,
+        font: { color: textColor, size: 15 }
+      },
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      margin: { l: 55, r: 40, t: 60, b: 60 },
+      hoverlabel: hoverlabelStyle,
+      xaxis: { title: `<b>Predicted ${isBoston ? 'Valuation ($)' : 'Profit ($)'}</b>`, gridcolor: gridColor, color: textColor },
+      yaxis: { title: '<b>Frequency Count</b>', gridcolor: gridColor, color: textColor }
+    };
+
+    Plotly.newPlot(plotDiv, [traceHist], layout, { responsive: true, displayModeBar: 'hover', displaylogo: false });
+  }
+}
+
+// Export Enriched CSV with Predictions
+function exportBatchCSV() {
+  if (!currentBatchResult) return;
+  const { headers, results, hasGroundTruth, project } = currentBatchResult;
+
+  const outHeaders = [...headers, 'Predicted_Value', ...(hasGroundTruth ? ['Residual_Error'] : [])];
+  const csvLines = [outHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(',')];
+
+  for (const r of results) {
+    const rowVals = headers.map(h => {
+      const v = r.rawRow[h] !== undefined ? r.rawRow[h] : '';
+      return `"${String(v).replace(/"/g, '""')}"`;
+    });
+    rowVals.push(`"${r.predDisplay}"`);
+    if (hasGroundTruth) {
+      rowVals.push(`"${r.residualDisplay}"`);
+    }
+    csvLines.push(rowVals.join(','));
+  }
+
+  const csvContent = csvLines.join('\n');
+  const filename = `${project}_predictions_${new Date().toISOString().slice(0, 10)}.csv`;
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

@@ -44,6 +44,7 @@
           <li>Modeling & Selection</li>
           <li>Evaluation & Diagnostics</li>
           <li>Deployment Pipeline</li>
+          <li>Batch CSV Evaluation</li>
         </ol>
       </div>
 
@@ -70,6 +71,7 @@
         <button class="tab-btn" onclick="switchTab('phase4')">⚖️ Phase 4: Modeling</button>
         <button class="tab-btn" onclick="switchTab('phase5')">📈 Phase 5: Evaluation</button>
         <button class="tab-btn" onclick="switchTab('phase6')">🚀 Phase 6: Prediction</button>
+        <button class="tab-btn" onclick="switchTab('batch')">📂 Batch CSV Evaluation</button>
       </nav>
 
       <!-- TAB 1: BUSINESS UNDERSTANDING -->
@@ -102,6 +104,11 @@
       <!-- TAB 6: PREDICTION CALCULATOR -->
       <section id="pane-phase6" class="tab-pane">
         <div id="content-phase6"></div>
+      </section>
+
+      <!-- TAB 7: BATCH CSV DATASET PREDICTION & EVALUATION -->
+      <section id="pane-batch" class="tab-pane">
+        <div id="content-batch"></div>
       </section>
     </main>
   </div>
