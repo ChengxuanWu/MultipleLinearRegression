@@ -180,11 +180,33 @@ function renderPhase2(isBoston) {
   if (isBoston) {
     container.innerHTML = `
       <div class="info-card">
-        <h3>🔍 Key Feature Explanations</h3>
+        <h3>🔍 Key Feature Explanations & Correlations</h3>
         <p>• <b>RM:</b> Average number of rooms per dwelling (Strongest positive driver, r = +0.70)<br>
         • <b>LSTAT:</b> % lower status of the population (Strongest inverse driver, r = -0.74)<br>
         • <b>PTRATIO:</b> Pupil-teacher ratio by town school district<br>
         • <b>DIS:</b> Weighted distances to five Boston employment centers</p>
+      </div>
+
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_01_correlation_heatmap.png" alt="Boston Correlation Heatmap" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📊 Predictor Correlation Matrix</div>
+            <div class="image-card-desc">Reveals strong positive correlation between RM and MEDV (+0.70) and severe inverse collinearity between LSTAT and MEDV (-0.74).</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_02_distributions_and_scatters.png" alt="Boston Distributions & Scatters" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📈 Target & Key Feature Scatter Distributions</div>
+            <div class="image-card-desc">Histograms and bivariate scatters displaying housing price density versus room count and neighborhood socioeconomic index.</div>
+          </div>
+        </div>
       </div>
     `;
   } else {
@@ -194,6 +216,38 @@ function renderPhase2(isBoston) {
         <p>• <b>R&D Spend:</b> Dominant profit driver showing near-perfect linear correlation (r = +0.97).<br>
         • <b>Marketing Spend:</b> Moderate positive correlation (r = +0.75), captures growth expansion.<br>
         • <b>Administration:</b> Virtually zero linear correlation with profitability (r = +0.20).</p>
+      </div>
+
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/01_correlation_heatmap.png" alt="Startups Correlation Heatmap" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📊 Predictor Correlation Heatmap</div>
+            <div class="image-card-desc">R&D Spend exhibits a dominant +0.97 linear correlation with Profit, while Administration shows virtually zero predictive power (+0.20).</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/03_profit_by_state.png" alt="Startups Profit by State" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">🗺️ Annual Profit Distribution Across States</div>
+            <div class="image-card-desc">Boxplots comparing profit medians and variance across New York, California, and Florida.</div>
+          </div>
+        </div>
+
+        <div class="image-card" style="grid-column: 1 / -1;">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/02_pairplot.png" alt="Startups Multivariate Pairplot" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">🔬 Multivariate Pairplot & Scatter Interactions</div>
+            <div class="image-card-desc">Pairwise distributions highlighting linear trends and homoscedasticity across spend channels.</div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -232,6 +286,28 @@ function renderPhase4(isBoston) {
       </div>
     `;
     tableContainer.innerHTML = `
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_feature_selection_comparison_methods.png" alt="Boston Feature Selection Comparison" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">⚖️ Multi-Method Feature Selection Comparison Benchmarks</div>
+            <div class="image-card-desc">Side-by-side performance trajectories across L1 Lasso, RFECV, mRMR, and Backward Elimination.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_feature_selection_curve.png" alt="Boston Feature Selection Curve" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📉 Feature Selection Progression & Metric Benchmarks</div>
+            <div class="image-card-desc">Tracking RMSE and R² curves reaching the optimal linear plateau at k=7.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="data-table-container">
         <table class="data-table">
           <thead>
@@ -261,6 +337,28 @@ function renderPhase4(isBoston) {
       </div>
     `;
     tableContainer.innerHTML = `
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/08_feature_selection_comparison.png" alt="Startups Model Generalization Comparison" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">⚖️ Model Generalization Lift Comparison</div>
+            <div class="image-card-desc">Cross-validation and test set performance gains comparing full model vs optimal k=2 subset.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/feature_selection_metrics_curve.png" alt="Startups Feature Selection Curve" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📉 Stepwise Backward Elimination Metrics Curve</div>
+            <div class="image-card-desc">Tracking R² and RMSE reduction as insignificant features (p > 0.05) are pruned.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="data-table-container">
         <table class="data-table">
           <thead>
@@ -301,6 +399,48 @@ function renderPhase5(isBoston) {
         <p>• <b>Linear Limitations:</b> Standard linear models plateau at R² ≈ 0.67 due to strong non-linear interactions between room count (RM) and socioeconomic factors (LSTAT).<br>
         • <b>Polynomial Ridge Breakthrough:</b> Incorporating degree-2 polynomial interactions regularized via 5-fold cross-validated Ridge (α = 3.29) pushes Test R² to <b>0.8029</b>, reducing RMSE by 22.9%.</p>
       </div>
+
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_04_actual_vs_predicted.png" alt="Boston Actual vs Predicted" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">🎯 Actual vs. Predicted MEDV Fit</div>
+            <div class="image-card-desc">Evaluating predictions against true home prices along the 45-degree identity reference line.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_06_residuals_normality_qq.png" alt="Boston Residuals Q-Q Plot" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📐 Residuals Normality & Q-Q Plot</div>
+            <div class="image-card-desc">Standardized sample quantiles aligned along theoretical normal distribution line.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_05_residuals_vs_fitted.png" alt="Boston Homoscedasticity" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📊 Homoscedasticity Diagnostic (Residuals vs Fitted)</div>
+            <div class="image-card-desc">Checking constant error variance across the predicted price spectrum.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/boston_07_standardized_coefficients.png" alt="Boston Standardized Coefficients" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">⚖️ Standardized Regression Coefficients</div>
+            <div class="image-card-desc">Relative feature importance showing RM (+0.38) and LSTAT (-0.41) as primary price drivers.</div>
+          </div>
+        </div>
+      </div>
     `;
   } else {
     container.innerHTML = `
@@ -315,6 +455,48 @@ function renderPhase5(isBoston) {
         <p>• <b>Normality of Residuals:</b> Shapiro-Wilk test p-value = 0.42 > 0.05, confirming normal errors.<br>
         • <b>Homoscedasticity:</b> Breusch-Pagan test p-value = 0.38 > 0.05, proving constant error variance across spend levels.<br>
         • <b>Multicollinearity:</b> VIF for both R&D Spend and Marketing Spend is 2.3 < 5.0, proving zero harmful multicollinearity.</p>
+      </div>
+
+      <div class="plot-grid">
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/04_actual_vs_predicted_final.png" alt="Startups Actual vs Predicted" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">🎯 Actual vs. Predicted Profit (Final k=2 Model)</div>
+            <div class="image-card-desc">High-fidelity alignment along the identity line verifying zero omitted-variable bias.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/06_residuals_normality_qq.png" alt="Startups Residuals Q-Q Plot" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📐 Residuals Normality & Quantile Check</div>
+            <div class="image-card-desc">Shapiro-Wilk validated normal errors confirming valid p-values and confidence intervals.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/05_residuals_vs_fitted.png" alt="Startups Homoscedasticity" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">📊 Homoscedasticity (Residuals vs Fitted)</div>
+            <div class="image-card-desc">Uniform error dispersion across small and large startups alike.</div>
+          </div>
+        </div>
+
+        <div class="image-card">
+          <div class="image-card-img-wrap">
+            <img src="output_plots/07_standardized_coefficients.png" alt="Startups Standardized Coefficients" loading="lazy">
+          </div>
+          <div class="image-card-body">
+            <div class="image-card-caption">⚖️ Standardized Beta Coefficients</div>
+            <div class="image-card-desc">Demonstrating R&D Spend as the primary driver (+0.91) followed by Marketing (+0.18).</div>
+          </div>
+        </div>
       </div>
     `;
   }

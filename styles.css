@@ -476,8 +476,72 @@ body {
   border: 1.5px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   min-height: 480px;
+}
+
+/* Image Gallery & Plot Cards */
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+  gap: 22px;
+  margin-top: 20px;
+  margin-bottom: 28px;
+}
+
+.image-card {
+  background-color: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-blue);
+}
+
+.image-card-img-wrap {
+  width: 100%;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1.5px solid var(--border-color);
+  overflow: hidden;
+}
+
+.image-card img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  display: block;
+}
+
+.image-card-body {
+  padding: 14px 18px 16px 18px;
+}
+
+.image-card-caption {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-accent);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.image-card-desc {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 /* Responsive */
